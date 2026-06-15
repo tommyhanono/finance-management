@@ -6,6 +6,10 @@ import {
 import CategoryBadge from '../components/CategoryBadge'
 import { formatCurrency } from '../utils/formatters'
 import { COLOR_PALETTE } from '../utils/defaultCategories'
+import {
+  computeSpendingByCategory, computeMonthlyTrend,
+  computeMonthlyIncomeExpenses, computeMonthlySummary,
+} from '../utils/computations'
 
 const chartTooltip = {
   contentStyle: { background: '#1a1d27', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 },
@@ -20,57 +24,10 @@ const Section = ({ title, children }) => (
 )
 
 export default function Analytics({ entries, categories }) {
-  const expenses = useMemo(() => entries.filter(e => e.amount < 0), [entries])
-  const income   = useMemo(() => entries.filter(e => e.amount > 0), [entries])
-
-  // Spending by category (pie)
-  const spendingByCat = useMemo(() =>
-    categories.map(cat => {
-      const total = expenses.filter(e => e.category === cat.id).reduce((s, e) => s + Math.abs(e.amount), 0)
-      return { name: `${cat.icon} ${cat.name}`, value: total, color: COLOR_PALETTE[cat.color] || '#6b7280', id: cat.id }
-    }).filter(d => d.value > 0).sort((a, b) => b.value - a.value),
-    [expenses, categories]
-  )
-
-  // Monthly trend per category
-  const monthlyTrend = useMemo(() => {
-    const map = {}
-    for (const e of entries) {
-      const month = e.date.slice(0, 7)
-      if (!map[month]) map[month] = { month }
-      const cat = categories.find(c => c.id === e.category)
-      if (cat) {
-        map[month][cat.id] = (map[month][cat.id] || 0) + e.amount
-      }
-    }
-    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
-  }, [entries, categories])
-
-  // Income vs expense by month
-  const monthlyIE = useMemo(() => {
-    const map = {}
-    for (const e of entries) {
-      const month = e.date.slice(0, 7)
-      if (!map[month]) map[month] = { month, income: 0, expenses: 0 }
-      if (e.amount > 0) map[month].income += e.amount
-      else map[month].expenses += Math.abs(e.amount)
-    }
-    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
-  }, [entries])
-
-  // Monthly summary table
-  const monthlySummary = useMemo(() => {
-    const map = {}
-    for (const e of entries) {
-      const month = e.date.slice(0, 7)
-      if (!map[month]) map[month] = { month, entries: 0, income: 0, expenses: 0, net: 0 }
-      map[month].entries++
-      if (e.amount > 0) map[month].income += e.amount
-      else map[month].expenses += Math.abs(e.amount)
-      map[month].net += e.amount
-    }
-    return Object.values(map).sort((a, b) => b.month.localeCompare(a.month))
-  }, [entries])
+  const spendingByCat  = useMemo(() => computeSpendingByCategory(entries, categories, COLOR_PALETTE), [entries, categories])
+  const monthlyTrend   = useMemo(() => computeMonthlyTrend(entries, categories),          [entries, categories])
+  const monthlyIE      = useMemo(() => computeMonthlyIncomeExpenses(entries),              [entries])
+  const monthlySummary = useMemo(() => computeMonthlySummary(entries),                    [entries])
 
   if (!entries.length) {
     return (

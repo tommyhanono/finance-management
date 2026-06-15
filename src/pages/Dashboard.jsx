@@ -6,6 +6,10 @@ import {
 import CategoryBadge from '../components/CategoryBadge'
 import { formatCurrency, formatDateShort, formatTime12 } from '../utils/formatters'
 import { COLOR_PALETTE } from '../utils/defaultCategories'
+import {
+  computeTotalIncome, computeTotalExpenses, computeBalance, computeSavingsRate,
+  computeRunningBalance, computeMonthlyIncomeExpenses, computeCategoryTotals, computeRecentEntries,
+} from '../utils/computations'
 
 const StatCard = ({ label, value, sub, valueClass = '' }) => (
   <div className="bg-[#1a1d27] border border-white/8 rounded-xl p-5">
@@ -21,53 +25,14 @@ const chartTooltipStyle = {
 }
 
 export default function Dashboard({ entries, onAddEntry, onEdit, categories }) {
-  const totalIncome   = useMemo(() => entries.filter(e => e.amount > 0).reduce((s, e) => s + e.amount, 0), [entries])
-  const totalExpenses = useMemo(() => entries.filter(e => e.amount < 0).reduce((s, e) => s + e.amount, 0), [entries])
-  const balance       = totalIncome + totalExpenses
-  const savingsRate   = totalIncome > 0 ? ((totalIncome + totalExpenses) / totalIncome) * 100 : 0
-
-  // Running balance over time
-  const runningData = useMemo(() => {
-    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''))
-    let running = 0
-    return sorted.map(e => {
-      running += e.amount
-      return { date: e.date, balance: running }
-    })
-  }, [entries])
-
-  // Monthly income vs expenses
-  const monthlyData = useMemo(() => {
-    const map = {}
-    for (const e of entries) {
-      const month = e.date.slice(0, 7)
-      if (!map[month]) map[month] = { month, income: 0, expenses: 0 }
-      if (e.amount > 0) map[month].income += e.amount
-      else map[month].expenses += Math.abs(e.amount)
-    }
-    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
-  }, [entries])
-
-  // Recent 8 entries
-  const recent = useMemo(() =>
-    [...entries].sort((a, b) => {
-      const dateCmp = b.date.localeCompare(a.date)
-      if (dateCmp !== 0) return dateCmp
-      return (b.time || '').localeCompare(a.time || '')
-    }).slice(0, 8),
-    [entries]
-  )
-
-  // Category totals
-  const catTotals = useMemo(() => {
-    const map = {}
-    for (const e of entries) {
-      if (!map[e.category]) map[e.category] = { total: 0, count: 0 }
-      map[e.category].total += e.amount
-      map[e.category].count++
-    }
-    return map
-  }, [entries])
+  const totalIncome   = useMemo(() => computeTotalIncome(entries),   [entries])
+  const totalExpenses = useMemo(() => computeTotalExpenses(entries), [entries])
+  const balance       = useMemo(() => computeBalance(entries),       [entries])
+  const savingsRate   = useMemo(() => computeSavingsRate(totalIncome, totalExpenses), [totalIncome, totalExpenses])
+  const runningData   = useMemo(() => computeRunningBalance(entries),          [entries])
+  const monthlyData   = useMemo(() => computeMonthlyIncomeExpenses(entries),   [entries])
+  const recent        = useMemo(() => computeRecentEntries(entries, 8),        [entries])
+  const catTotals     = useMemo(() => computeCategoryTotals(entries),          [entries])
 
   return (
     <div className="fade-in space-y-6">
@@ -106,9 +71,9 @@ export default function Dashboard({ entries, onAddEntry, onEdit, categories }) {
         />
         <StatCard
           label="Savings Rate"
-          value={totalIncome > 0 ? `${savingsRate.toFixed(1)}%` : '—'}
-          valueClass={savingsRate >= 0 ? 'text-emerald-400' : 'text-red-400'}
-          sub={totalIncome > 0 ? (savingsRate >= 20 ? 'On track!' : 'Keep saving') : 'No income yet'}
+          value={savingsRate !== null ? `${savingsRate.toFixed(1)}%` : '—'}
+          valueClass={savingsRate === null || savingsRate >= 0 ? 'text-emerald-400' : 'text-red-400'}
+          sub={savingsRate !== null ? (savingsRate >= 20 ? 'On track!' : 'Keep saving') : 'No income yet'}
         />
       </div>
 

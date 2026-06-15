@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import CategoryBadge from '../components/CategoryBadge'
 import { formatCurrency, formatDate, formatTime12 } from '../utils/formatters'
 
@@ -163,9 +163,8 @@ export default function History({ entries, onEdit, onDelete, categories }) {
               {pageData.map(e => {
                 const cat = categories.find(c => c.id === e.category)
                 return (
-                  <>
+                  <React.Fragment key={e.id}>
                     <tr
-                      key={e.id}
                       className="border-b border-white/3 hover:bg-white/3 transition-colors cursor-pointer"
                       onClick={() => setExpanded(expanded === e.id ? null : e.id)}
                     >
@@ -200,11 +199,11 @@ export default function History({ entries, onEdit, onDelete, categories }) {
                       </td>
                     </tr>
                     {expanded === e.id && e.notes && (
-                      <tr key={`${e.id}-exp`} className="bg-white/2">
+                      <tr className="bg-white/2">
                         <td colSpan={6} className="px-6 py-3 text-sm text-slate-400 italic">{e.notes}</td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 )
               })}
             </tbody>

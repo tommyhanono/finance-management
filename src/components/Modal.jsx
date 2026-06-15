@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { COLOR_PALETTE } from '../utils/defaultCategories'
 import { todayISO, nowTime } from '../utils/formatters'
+import { saveSuggestion, getSuggestionsForCategory, filterSuggestions } from '../utils/suggestions'
+import { validateEntryForm, buildEntryPayload } from '../utils/computations'
 
 const EMPTY = {
   category: '',
@@ -12,21 +14,6 @@ const EMPTY = {
   platform: '',
   notes: '',
   recurring: false,
-}
-
-const DESC_STORAGE_KEY = (userId) => `spendledger-desc-suggestions-${userId}`
-
-const loadSuggestions = (userId) => {
-  try { return JSON.parse(localStorage.getItem(DESC_STORAGE_KEY(userId)) || '{}') } catch { return {} }
-}
-const saveSuggestion = (userId, catId, desc) => {
-  try {
-    const all = loadSuggestions(userId)
-    const prev = all[catId] || []
-    const next = [desc, ...prev.filter(d => d !== desc)].slice(0, 5)
-    all[catId] = next
-    localStorage.setItem(DESC_STORAGE_KEY(userId), JSON.stringify(all))
-  } catch {}
 }
 
 export default function Modal({ open, onClose, onSave, initial, categories, userId }) {
@@ -54,20 +41,14 @@ export default function Modal({ open, onClose, onSave, initial, categories, user
 
   useEffect(() => {
     if (form.category && userId) {
-      const all = loadSuggestions(userId)
-      setSuggestions(all[form.category] || [])
+      setSuggestions(getSuggestionsForCategory(userId, form.category))
     }
   }, [form.category, userId])
 
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }))
 
   const validate = () => {
-    const e = {}
-    if (!form.category) e.category = 'Required'
-    if (!form.description.trim()) e.description = 'Required'
-    if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0) e.amount = 'Enter a positive number'
-    if (!form.date) e.date = 'Required'
-    if (!form.time) e.time = 'Required'
+    const e = validateEntryForm(form)
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -75,20 +56,8 @@ export default function Modal({ open, onClose, onSave, initial, categories, user
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!validate()) return
-    const amount = form.type === 'income' ? Number(form.amount) : -Number(form.amount)
-    const desc = form.description.trim()
-    if (userId && form.category) saveSuggestion(userId, form.category, desc)
-    onSave({
-      category: form.category,
-      type: form.type,
-      description: desc,
-      amount,
-      date: form.date,
-      time: form.time,
-      platform: form.platform.trim() || null,
-      notes: form.notes.trim() || null,
-      recurring: form.recurring,
-    })
+    saveSuggestion(userId, form.category, form.description.trim())
+    onSave(buildEntryPayload(form))
     onClose()
   }
 
@@ -97,9 +66,7 @@ export default function Modal({ open, onClose, onSave, initial, categories, user
   const selectedCat = categories.find(c => c.id === form.category)
   const catColor = selectedCat ? (COLOR_PALETTE[selectedCat.color] || '#10b981') : '#10b981'
 
-  const filteredSuggestions = suggestions.filter(
-    s => !form.description || s.toLowerCase().includes(form.description.toLowerCase())
-  )
+  const filteredSuggestions = filterSuggestions(suggestions, form.description)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
