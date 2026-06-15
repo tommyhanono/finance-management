@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { COLOR_PALETTE, COLOR_KEYS, ICON_SET } from '../utils/defaultCategories'
+import { CURRENCIES, CURRENCY_KEYS } from '../utils/currency'
 
 const AVATAR_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e', '#ef4444', '#0ea5e9', '#ec4899', '#14b8a6']
 const initials = (name) => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -9,6 +10,8 @@ export default function Settings({
   entries, onImport, onReset, currentUser, authHook, onLogout,
   categories, onAddCategory, onEditCategory, onDeleteCategory,
   onReassignOrDeleteByCategory,
+  budgets, onSetBudget, onRemoveBudget,
+  currencyCode, customRates, onSetCurrency, onSetRate,
 }) {
   const [resetText, setResetText] = useState('')
   const [showResetDialog, setShowResetDialog] = useState(false)
@@ -40,7 +43,41 @@ export default function Settings({
   const { users, addUser, updateUserPassword, deleteUser } = authHook || {}
   const isAdmin = currentUser?.isAdmin === true
 
+  // ── Budget state ─────────────────────────────────────────────────────────
+  const [editingBudgetCat, setEditingBudgetCat] = useState(null)
+  const [budgetInput, setBudgetInput]           = useState('')
+
+  // ── Currency state ────────────────────────────────────────────────────────
+  const [rateInput, setRateInput]               = useState({})
+
   // ── Export / Import ──────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const headers = ['Date', 'Time', 'Category', 'Description', 'Type', 'Amount', 'Platform', 'Notes', 'Tags', 'Recurring']
+    const rows = entries.map(e => {
+      const cat = categories.find(c => c.id === e.category)
+      return [
+        e.date,
+        e.time || '',
+        cat ? `${cat.icon} ${cat.name}` : e.category,
+        `"${(e.description || '').replace(/"/g, '""')}"`,
+        e.amount >= 0 ? 'Income' : 'Expense',
+        e.amount,
+        `"${(e.platform || '').replace(/"/g, '""')}"`,
+        `"${(e.notes || '').replace(/"/g, '""')}"`,
+        `"${(e.tags || []).join(', ')}"`,
+        e.recurring ? 'Yes' : 'No',
+      ].join(',')
+    })
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url
+    a.download = `spendledger-export-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const exportJSON = () => {
     const data = { entries, categories, exportedAt: new Date().toISOString() }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -308,6 +345,124 @@ export default function Settings({
         </div>
       )}
 
+      {/* ── Budget Goals ─────────────────────────────────────────────── */}
+      {budgets !== undefined && (
+        <div className="bg-[#1a1d27] border border-white/8 rounded-xl p-5">
+          <div className="mb-4">
+            <h3 className="font-heading font-semibold text-white">Budget Goals</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Set monthly spending limits per category</p>
+          </div>
+          <div className="space-y-3">
+            {categories.map(cat => {
+              const b      = budgets[cat.id]?.monthly
+              const isEditing = editingBudgetCat === cat.id
+              const spent  = Math.abs(entries
+                .filter(e => e.category === cat.id && e.amount < 0 && e.date.startsWith(new Date().toISOString().slice(0,7)))
+                .reduce((s, e) => s + e.amount, 0))
+              return (
+                <div key={cat.id} className="flex items-center justify-between p-3 rounded-xl border border-white/5 hover:border-white/10 transition-all">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{cat.icon}</span>
+                    <div>
+                      <p className="text-sm font-medium text-white">{cat.name}</p>
+                      {b ? (
+                        <p className="text-xs text-slate-500">
+                          {new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(spent)} /
+                          {new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(b)} this month
+                        </p>
+                      ) : (
+                        <p className="text-xs text-slate-600">No budget set</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">$</span>
+                          <input
+                            type="number" min="0" step="1"
+                            value={budgetInput}
+                            onChange={e => setBudgetInput(e.target.value)}
+                            placeholder="0"
+                            className="w-24 bg-[#0f1117] border border-white/10 rounded-lg pl-5 pr-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/40"
+                            autoFocus
+                          />
+                        </div>
+                        <button
+                          onClick={() => { if (budgetInput) onSetBudget(cat.id, budgetInput); setEditingBudgetCat(null); setBudgetInput('') }}
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all"
+                        >Save</button>
+                        <button onClick={() => setEditingBudgetCat(null)} className="text-xs text-slate-500 hover:text-white transition-colors">✕</button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => { setEditingBudgetCat(cat.id); setBudgetInput(b ? String(b) : '') }}
+                          className="text-xs px-2.5 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all"
+                        >{b ? 'Edit' : 'Set budget'}</button>
+                        {b && (
+                          <button onClick={() => onRemoveBudget(cat.id)} className="text-xs text-slate-600 hover:text-red-400 transition-colors">✕</button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Currency ──────────────────────────────────────────────────── */}
+      {currencyCode !== undefined && (
+        <div className="bg-[#1a1d27] border border-white/8 rounded-xl p-5">
+          <div className="mb-4">
+            <h3 className="font-heading font-semibold text-white">Display Currency</h3>
+            <p className="text-xs text-slate-500 mt-0.5">All amounts entered in USD — converted for display</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+            {CURRENCY_KEYS.map(code => (
+              <button
+                key={code}
+                onClick={() => onSetCurrency(code)}
+                className={`p-2.5 rounded-xl border text-left transition-all ${
+                  currencyCode === code
+                    ? 'border-emerald-500/50 bg-emerald-500/10'
+                    : 'border-white/8 hover:border-white/15'
+                }`}
+              >
+                <span className="text-white text-sm font-heading font-semibold">{CURRENCIES[code].symbol} {code}</span>
+                <span className="block text-xs text-slate-500 mt-0.5">{CURRENCIES[code].name}</span>
+              </button>
+            ))}
+          </div>
+          {currencyCode !== 'USD' && (
+            <div className="p-3 rounded-xl bg-[#0f1117] border border-white/8">
+              <p className="text-xs text-slate-400 mb-2">
+                Exchange rate: 1 USD =
+                <span className="text-white font-medium ml-1">
+                  {(customRates[currencyCode] ?? CURRENCIES[currencyCode]?.rate ?? 1).toFixed(4)} {currencyCode}
+                </span>
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="number" min="0" step="0.0001"
+                  value={rateInput[currencyCode] ?? ''}
+                  onChange={e => setRateInput(p => ({ ...p, [currencyCode]: e.target.value }))}
+                  placeholder={`Custom rate (default: ${CURRENCIES[currencyCode]?.rate})`}
+                  className="flex-1 bg-[#1a1d27] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/40"
+                />
+                <button
+                  onClick={() => { if (rateInput[currencyCode]) { onSetRate(currencyCode, rateInput[currencyCode]); setRateInput(p => ({...p, [currencyCode]: ''})) } }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all"
+                >Set</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Admin: Account Management ─────────────────────────────────── */}
       {isAdmin && (
         <div className="bg-[#1a1d27] border border-amber-500/20 rounded-xl p-5">
@@ -451,10 +606,15 @@ export default function Settings({
       {/* ── Export ────────────────────────────────────────────────────── */}
       <div className="bg-[#1a1d27] border border-white/8 rounded-xl p-5">
         <h3 className="font-heading font-semibold text-white mb-1">Export Data</h3>
-        <p className="text-sm text-slate-500 mb-4">Download all {entries.length} entries as JSON.</p>
-        <button onClick={exportJSON} className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-heading font-semibold transition-all">
-          Download JSON
-        </button>
+        <p className="text-sm text-slate-500 mb-4">Download all {entries.length} entries.</p>
+        <div className="flex gap-3 flex-wrap">
+          <button onClick={exportJSON} className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-heading font-semibold transition-all">
+            Download JSON
+          </button>
+          <button onClick={exportCSV} className="px-5 py-2.5 rounded-xl border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-sm font-heading font-semibold transition-all">
+            Download CSV
+          </button>
+        </div>
       </div>
 
       {/* ── Import ────────────────────────────────────────────────────── */}
@@ -496,7 +656,7 @@ export default function Settings({
       <div className="bg-[#1a1d27] border border-white/8 rounded-xl p-5">
         <h3 className="font-heading font-semibold text-white mb-3">About SpendLedger</h3>
         <div className="space-y-2 text-sm text-slate-500">
-          <p>Version 1.0.0</p>
+          <p>Version 2.0.0</p>
           <p>{entries.length} entries synced to Firebase.</p>
           <p>
             <a href="https://github.com/tommyhanono/spend-ledger" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">

@@ -208,6 +208,7 @@ export const buildEntryPayload = (form) => ({
   platform:    form.platform?.trim() || null,
   notes:       form.notes?.trim() || null,
   recurring:   Boolean(form.recurring),
+  tags:        Array.isArray(form.tags) ? form.tags.filter(Boolean) : [],
 })
 
 // ─── Auth ────────────────────────────────────────────────────────────────────

@@ -14,9 +14,16 @@ const COLS = [
 
 export default function History({ entries, onEdit, onDelete, categories }) {
   const [sort, setSort]     = useState({ key: 'date', dir: -1 })
-  const [filter, setFilter] = useState({ cats: [], type: 'all', search: '', dateFrom: '', dateTo: '' })
+  const [filter, setFilter] = useState({ cats: [], type: 'all', search: '', dateFrom: '', dateTo: '', tag: '' })
   const [page, setPage]     = useState(1)
   const [expanded, setExpanded] = useState(null)
+
+  // Collect all unique tags across entries
+  const allTags = useMemo(() => {
+    const set = new Set()
+    entries.forEach(e => (e.tags || []).forEach(t => set.add(t)))
+    return [...set].sort()
+  }, [entries])
 
   const filtered = useMemo(() => {
     let r = [...entries]
@@ -33,6 +40,7 @@ export default function History({ entries, onEdit, onDelete, categories }) {
     }
     if (filter.dateFrom) r = r.filter(e => e.date >= filter.dateFrom)
     if (filter.dateTo)   r = r.filter(e => e.date <= filter.dateTo)
+    if (filter.tag)      r = r.filter(e => (e.tags || []).includes(filter.tag))
     return r
   }, [entries, filter])
 
@@ -126,6 +134,24 @@ export default function History({ entries, onEdit, onDelete, categories }) {
           <input type="date" value={filter.dateTo} onChange={e => { setFilter(p => ({ ...p, dateTo: e.target.value })); setPage(1) }}
             className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-emerald-500/40" />
         </div>
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-slate-500 mr-1">Tag:</span>
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => { setFilter(p => ({ ...p, tag: p.tag === tag ? '' : tag })); setPage(1) }}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                  filter.tag === tag
+                    ? 'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
+                    : 'border-white/10 text-slate-500 hover:border-white/20'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Summary */}
@@ -176,8 +202,13 @@ export default function History({ entries, onEdit, onDelete, categories }) {
                         {cat ? <CategoryBadge category={cat} /> : <span className="text-slate-600 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3 text-slate-300">
-                        {e.description}
-                        {e.recurring && <span className="ml-2 text-xs text-slate-600 border border-slate-700 rounded px-1">↺</span>}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{e.description}</span>
+                          {e.recurring && <span className="text-xs text-slate-600 border border-slate-700 rounded px-1">↺</span>}
+                          {(e.tags || []).map(tag => (
+                            <span key={tag} className="text-xs bg-white/5 text-slate-500 px-1.5 py-0.5 rounded">#{tag}</span>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-500 text-xs">{e.platform || '—'}</td>
                       <td className="px-4 py-3">

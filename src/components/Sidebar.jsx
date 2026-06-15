@@ -2,6 +2,8 @@ const NAV = [
   { id: 'dashboard',  label: 'Dashboard',  icon: '📊' },
   { id: 'history',    label: 'History',    icon: '📋' },
   { id: 'analytics',  label: 'Analytics',  icon: '📈' },
+  { id: 'recurring',  label: 'Recurring',  icon: '🔁' },
+  { id: 'networth',   label: 'Net Worth',  icon: '🏦' },
   { id: 'settings',   label: 'Settings',   icon: '⚙️' },
 ]
 

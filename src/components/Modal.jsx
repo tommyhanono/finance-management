@@ -14,6 +14,8 @@ const EMPTY = {
   platform: '',
   notes: '',
   recurring: false,
+  tags: [],
+  tagInput: '',
 }
 
 export default function Modal({ open, onClose, onSave, initial, categories, userId }) {
@@ -31,9 +33,11 @@ export default function Modal({ open, onClose, onSave, initial, categories, user
           amount: String(Math.abs(initial.amount)),
           type: initial.amount >= 0 ? 'income' : 'expense',
           time: initial.time || nowTime(),
+          tags: initial.tags || [],
+          tagInput: '',
         })
       } else {
-        setForm({ ...EMPTY, date: todayISO(), time: nowTime(), category: categories[0]?.id || '' })
+        setForm({ ...EMPTY, date: todayISO(), time: nowTime(), category: categories[0]?.id || '', tags: [], tagInput: '' })
       }
       setErrors({})
     }
@@ -225,6 +229,44 @@ export default function Modal({ open, onClose, onSave, initial, categories, user
               rows={2}
               placeholder="Any additional notes..."
               className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 resize-none"
+            />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+              Tags <span className="text-slate-600">(optional — press Enter to add)</span>
+            </label>
+            {form.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {form.tags.map(tag => (
+                  <span
+                    key={tag}
+                    className="flex items-center gap-1 text-xs bg-white/8 text-slate-300 px-2 py-1 rounded-lg"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => set('tags', form.tags.filter(t => t !== tag))}
+                      className="text-slate-500 hover:text-white ml-0.5 leading-none"
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              value={form.tagInput || ''}
+              onChange={e => set('tagInput', e.target.value)}
+              onKeyDown={e => {
+                if ((e.key === 'Enter' || e.key === ',') && form.tagInput?.trim()) {
+                  e.preventDefault()
+                  const tag = form.tagInput.trim().toLowerCase().replace(/,/g, '')
+                  if (tag && !form.tags.includes(tag)) set('tags', [...form.tags, tag])
+                  set('tagInput', '')
+                }
+              }}
+              placeholder="e.g. groceries, work, vacation..."
+              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/50"
             />
           </div>
 
